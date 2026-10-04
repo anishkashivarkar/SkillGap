@@ -1,6 +1,9 @@
 import streamlit as st
 import fitz
+import spacy
 from docx import Document
+
+nlp = spacy.load("en_core_web_sm")
 
 
 # ---------- Page Setup ----------
@@ -16,22 +19,31 @@ st.write(
 
 # ---------- Resume Text Extraction ----------
 def extract_resume_text(uploaded_file):
+
     file_type = uploaded_file.name.lower()
 
     if file_type.endswith(".pdf"):
-        document = fitz.open(stream=uploaded_file.read(), filetype="pdf")
+
+        document = fitz.open(
+            stream=uploaded_file.read(),
+            filetype="pdf"
+        )
 
         text = ""
+
         for page in document:
             text += page.get_text()
 
         document.close()
+
         return text
 
     elif file_type.endswith(".docx"):
+
         document = Document(uploaded_file)
 
         text = ""
+
         for paragraph in document.paragraphs:
             text += paragraph.text + "\n"
 
@@ -39,6 +51,21 @@ def extract_resume_text(uploaded_file):
 
     else:
         raise ValueError("Unsupported file type.")
+
+
+# ---------- NLP Preprocessing ----------
+def preprocess_text(text):
+
+    doc = nlp(text)
+
+    tokens = []
+
+    for token in doc:
+
+        if not token.is_stop and not token.is_punct and not token.is_space:
+            tokens.append(token.lemma_.lower())
+
+    return " ".join(tokens)
 
 
 # ---------- User Input ----------
@@ -58,27 +85,63 @@ job_description = st.text_area(
 if st.button("Analyze Resume"):
 
     if not resume_file and not job_description.strip():
-        st.warning("Please upload a resume and enter a job description.")
+
+        st.warning(
+            "Please upload a resume and enter a job description."
+        )
 
     elif not resume_file:
+
         st.warning("Please upload a resume.")
 
     elif not job_description.strip():
+
         st.warning("Please enter a job description.")
 
     else:
+
         try:
+
+            # Extract resume text
             resume_text = extract_resume_text(resume_file)
 
             if not resume_text.strip():
+
                 st.error("Could not extract any text from the resume.")
+
             else:
+
+                # Display extracted resume
                 st.subheader("Extracted Resume Text")
+
                 st.text_area(
                     "Resume content",
                     resume_text,
                     height=400
                 )
 
+                # Preprocess resume and job description
+                processed_resume = preprocess_text(resume_text)
+                processed_job = preprocess_text(job_description)
+
+                # Display processed resume
+                st.subheader("Preprocessed Resume Text")
+
+                st.text_area(
+                    "NLP processed resume",
+                    processed_resume,
+                    height=300
+                )
+
+                # Display processed job description
+                st.subheader("Preprocessed Job Description")
+
+                st.text_area(
+                    "NLP processed job description",
+                    processed_job,
+                    height=300
+                )
+
         except Exception as e:
-            st.error(f"Error extracting resume text: {e}")
+
+            st.error(f"Error processing resume: {e}")
