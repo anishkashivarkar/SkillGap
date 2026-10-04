@@ -2,6 +2,8 @@ import streamlit as st
 import fitz
 import spacy
 from docx import Document
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
 nlp = spacy.load("en_core_web_sm")
 
@@ -124,6 +126,18 @@ if st.button("Analyze Resume"):
                 processed_resume = preprocess_text(resume_text)
                 processed_job = preprocess_text(job_description)
 
+                #create TF-IDF vectorizer
+                vectorizer = TfidfVectorizer()
+
+                tfidf_matrix = vectorizer.fit_transform(
+                [processed_resume, processed_job]
+                )
+
+                # Calculate cosine similarity
+                similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])
+
+                similarity_score = similarity[0][0] * 100
+
                 # Display processed resume
                 st.subheader("Preprocessed Resume Text")
 
@@ -132,6 +146,12 @@ if st.button("Analyze Resume"):
                     processed_resume,
                     height=300
                 )
+
+                #Display similarity score
+                st.subheader("Resume–Job Description Similarity")
+                st.metric(
+               "Similarity Score",
+                f"{similarity_score:.2f}%")
 
                 # Display processed job description
                 st.subheader("Preprocessed Job Description")
