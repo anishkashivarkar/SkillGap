@@ -5,7 +5,36 @@ from docx import Document
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 
+
+# ---------- NLP Model ----------
 nlp = spacy.load("en_core_web_sm")
+
+
+# ---------- Skill Vocabulary ----------
+SKILLS = [
+    "python",
+    "java",
+    "c++",
+    "machine learning",
+    "deep learning",
+    "natural language processing",
+    "nlp",
+    "sql",
+    "mysql",
+    "pandas",
+    "numpy",
+    "scikit-learn",
+    "tensorflow",
+    "pytorch",
+    "flask",
+    "streamlit",
+    "git",
+    "github",
+    "docker",
+    "aws",
+    "mongodb",
+    "computer vision",
+]
 
 
 # ---------- Page Setup ----------
@@ -70,6 +99,21 @@ def preprocess_text(text):
     return " ".join(tokens)
 
 
+# ---------- Skill Extraction ----------
+def extract_skills(text):
+
+    text = text.lower()
+
+    found_skills = []
+
+    for skill in SKILLS:
+
+        if skill in text:
+            found_skills.append(skill)
+
+    return found_skills
+
+
 # ---------- User Input ----------
 resume_file = st.file_uploader(
     "Upload your resume (PDF or DOCX)",
@@ -104,7 +148,7 @@ if st.button("Analyze Resume"):
 
         try:
 
-            # Extract resume text
+            # ---------- Extract Resume Text ----------
             resume_text = extract_resume_text(resume_file)
 
             if not resume_text.strip():
@@ -113,7 +157,7 @@ if st.button("Analyze Resume"):
 
             else:
 
-                # Display extracted resume
+                # ---------- Display Extracted Resume ----------
                 st.subheader("Extracted Resume Text")
 
                 st.text_area(
@@ -122,24 +166,115 @@ if st.button("Analyze Resume"):
                     height=400
                 )
 
-                # Preprocess resume and job description
+
+                # ---------- NLP Preprocessing ----------
                 processed_resume = preprocess_text(resume_text)
                 processed_job = preprocess_text(job_description)
 
-                #create TF-IDF vectorizer
+
+                # ---------- Skill Extraction ----------
+                resume_skills = extract_skills(processed_resume)
+                job_skills = extract_skills(processed_job)
+
+
+                # ---------- Skill Matching ----------
+                matched_skills = list(
+                    set(resume_skills) & set(job_skills)
+                )
+
+                missing_skills = list(
+                    set(job_skills) - set(resume_skills)
+                )
+
+
+                # ---------- Skill Analysis ----------
+                st.subheader("Skill Analysis")
+
+
+                # Matched Skills
+                st.write("### Matched Skills")
+
+                if matched_skills:
+
+                    st.success(
+                        ", ".join(matched_skills)
+                    )
+
+                else:
+
+                    st.info("No matching skills found.")
+
+
+                # Missing Skills
+                st.write("### Missing Skills")
+
+                if missing_skills:
+
+                    st.warning(
+                        ", ".join(missing_skills)
+                    )
+
+                else:
+
+                    st.success(
+                        "No major missing skills found."
+                    )
+
+
+                # ---------- Skill Match Score ----------
+                if job_skills:
+
+                    skill_match_score = (
+                        len(matched_skills) /
+                        len(job_skills)
+                    ) * 100
+
+                else:
+
+                    skill_match_score = 0
+
+
+                st.metric(
+                    "Skill Match",
+                    f"{skill_match_score:.2f}%"
+                )
+
+
+                # ---------- TF-IDF ----------
                 vectorizer = TfidfVectorizer()
 
                 tfidf_matrix = vectorizer.fit_transform(
-                [processed_resume, processed_job]
+                    [
+                        processed_resume,
+                        processed_job
+                    ]
                 )
 
-                # Calculate cosine similarity
-                similarity = cosine_similarity(tfidf_matrix[0:1], tfidf_matrix[1:2])
+
+                # ---------- Cosine Similarity ----------
+                similarity = cosine_similarity(
+                    tfidf_matrix[0:1],
+                    tfidf_matrix[1:2]
+                )
 
                 similarity_score = similarity[0][0] * 100
 
-                # Display processed resume
-                st.subheader("Preprocessed Resume Text")
+
+                # ---------- Similarity Score ----------
+                st.subheader(
+                    "Resume–Job Description Similarity"
+                )
+
+                st.metric(
+                    "Similarity Score",
+                    f"{similarity_score:.2f}%"
+                )
+
+
+                # ---------- Preprocessed Resume ----------
+                st.subheader(
+                    "Preprocessed Resume Text"
+                )
 
                 st.text_area(
                     "NLP processed resume",
@@ -147,14 +282,11 @@ if st.button("Analyze Resume"):
                     height=300
                 )
 
-                #Display similarity score
-                st.subheader("Resume–Job Description Similarity")
-                st.metric(
-               "Similarity Score",
-                f"{similarity_score:.2f}%")
 
-                # Display processed job description
-                st.subheader("Preprocessed Job Description")
+                # ---------- Preprocessed Job Description ----------
+                st.subheader(
+                    "Preprocessed Job Description"
+                )
 
                 st.text_area(
                     "NLP processed job description",
@@ -162,6 +294,9 @@ if st.button("Analyze Resume"):
                     height=300
                 )
 
+
         except Exception as e:
 
-            st.error(f"Error processing resume: {e}")
+            st.error(
+                f"Error processing resume: {e}"
+            )
