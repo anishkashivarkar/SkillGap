@@ -1,6 +1,8 @@
 import streamlit as st
 import fitz
 import spacy
+import json
+import re
 from docx import Document
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
@@ -11,42 +13,23 @@ nlp = spacy.load("en_core_web_sm")
 
 
 # ---------- Skill Vocabulary ----------
-SKILLS = [
-    "python",
-    "java",
-    "c++",
-    "machine learning",
-    "deep learning",
-    "natural language processing",
-    "nlp",
-    "sql",
-    "mysql",
-    "pandas",
-    "numpy",
-    "scikit-learn",
-    "tensorflow",
-    "pytorch",
-    "flask",
-    "streamlit",
-    "git",
-    "github",
-    "docker",
-    "aws",
-    "mongodb",
-    "computer vision",
-]
+with open("data/skills.json", "r", encoding="utf-8") as file:
+    SKILLS = json.load(file)
 
 
 # ---------- Page Setup ----------
 st.set_page_config(page_title="SkillGap AI")
 
-st.title("SkillGap AI")
-st.subheader("AI-powered Resume & Job Description Analyzer")
+st.title("🎯 SkillGap AI")
+st.subheader("AI-Powered Resume & Job Description Analyzer")
 
 st.write(
-    "Compare a resume with a job description to identify matching and missing skills."
+    "Analyze your resume against a job description, identify matching and missing skills, "
+    "and measure overall job compatibility."
 )
 
+
+st.divider()
 
 # ---------- Resume Text Extraction ----------
 def extract_resume_text(uploaded_file):
@@ -99,16 +82,57 @@ def preprocess_text(text):
     return " ".join(tokens)
 
 
-# ---------- Skill Extraction ----------
-def extract_skills(text):
+# ---------- Skill Normalization ----------
+def normalize_text(text):
 
     text = text.lower()
 
+    # Convert & to and so dataset variations match
+    text = text.replace("&", "and")
+
+    # Normalize spaces
+    text = re.sub(r"\s+", " ", text)
+
+    return text
+
+# ---------- Generic / Noisy Skills ----------
+IGNORED_SKILLS = {
+    "ai",
+    "ml",
+    "programming",
+    "engineering",
+    "databases",
+    "presentations",
+    "sql queries",
+    "sql databases",
+}
+
+
+# ---------- Skill Extraction ----------
+def extract_skills(text):
+
+    text = normalize_text(text)
+
     found_skills = []
 
-    for skill in SKILLS:
+    # Check longer skills first
+    sorted_skills = sorted(
+        SKILLS,
+        key=len,
+        reverse=True
+    )
 
-        if skill in text:
+    for skill in sorted_skills:
+
+        skill = normalize_text(skill)
+
+        if skill in IGNORED_SKILLS:
+            continue
+
+        pattern = r"(?<!\w)" + re.escape(skill) + r"(?!\w)"
+
+        if re.search(pattern, text):
+
             found_skills.append(skill)
 
     return found_skills
@@ -167,22 +191,18 @@ if st.button("Analyze Resume"):
                 )
 
 
-                # ---------- NLP Preprocessing ----------
-                processed_resume = preprocess_text(resume_text)
-                processed_job = preprocess_text(job_description)
-
-
                 # ---------- Skill Extraction ----------
-                resume_skills = extract_skills(processed_resume)
-                job_skills = extract_skills(processed_job)
+                # Use original text for skill matching
+                resume_skills = extract_skills(resume_text)
+                job_skills = extract_skills(job_description)
 
 
                 # ---------- Skill Matching ----------
-                matched_skills = list(
+                matched_skills = sorted(
                     set(resume_skills) & set(job_skills)
                 )
 
-                missing_skills = list(
+                missing_skills = sorted(
                     set(job_skills) - set(resume_skills)
                 )
 
@@ -190,35 +210,24 @@ if st.button("Analyze Resume"):
                 # ---------- Skill Analysis ----------
                 st.subheader("Skill Analysis")
 
-
                 # Matched Skills
-                st.write("### Matched Skills")
+                col1, col2 = st.columns(2)
 
-                if matched_skills:
+                with col1:
+                    st.subheader("✅ Matched Skills")
+                    if matched_skills:
+                        for skill in matched_skills:
+                            st.success(skill)
+                    else:
+                        st.info("No matching skills found.")
 
-                    st.success(
-                        ", ".join(matched_skills)
-                    )
-
-                else:
-
-                    st.info("No matching skills found.")
-
-
-                # Missing Skills
-                st.write("### Missing Skills")
-
-                if missing_skills:
-
-                    st.warning(
-                        ", ".join(missing_skills)
-                    )
-
-                else:
-
-                    st.success(
-                        "No major missing skills found."
-                    )
+                with col2:
+                    st.subheader("⚠️ Missing Skills")
+                    if missing_skills:
+                        for skill in missing_skills:
+                            st.warning(skill)
+                    else:
+                        st.success("No major missing skills found.")
 
 
                 # ---------- Skill Match Score ----------
@@ -234,10 +243,11 @@ if st.button("Analyze Resume"):
                     skill_match_score = 0
 
 
-                st.metric(
-                    "Skill Match",
-                    f"{skill_match_score:.2f}%"
-                )
+                
+
+                # ---------- NLP Preprocessing ----------
+                processed_resume = preprocess_text(resume_text)
+                processed_job = preprocess_text(job_description)
 
 
                 # ---------- TF-IDF ----------
@@ -265,11 +275,39 @@ if st.button("Analyze Resume"):
                     "Resume–Job Description Similarity"
                 )
 
-                st.metric(
-                    "Similarity Score",
-                    f"{similarity_score:.2f}%"
-                )
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.metric(
+                        "🎯 Skill Match Score",
+                        f"{skill_match_score:.2f}%"
+                    )
+                
+                with col2:
+                    st.metric(
+                        "📄 Resume-JD Text Similarity",
+                        f"{similarity_score:.2f}%"
+                    )
 
+
+            st.subheader("💡 Recommendation")
+
+            if skill_match_score >= 70:
+                st.success(
+                "Strong skill match! Your resume aligns well with the requirements of this job."
+           )
+
+            elif skill_match_score >= 40:
+               st.info(
+                "Moderate skill match. Consider improving or adding the missing skills highlighted above."
+            )
+
+            else:
+                st.warning(
+                "Low skill match. Consider developing the missing skills before applying."
+           )
+
+                
 
                 # ---------- Preprocessed Resume ----------
                 st.subheader(
